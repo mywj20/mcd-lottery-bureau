@@ -140,7 +140,7 @@ mcd-lottery-bureau/
 │       ├── value.py       # 估值模型（使用概率折价 + 诱导消费扣减）
 │       └── lottery.py     # 精算引擎（保底回血 / 情景分析 / 欧皇鉴定）
 ├── examples/              # 示例数据与产物
-├── tests/                 # 单元测试（26 个用例）
+├── tests/                 # 单元测试（31 个用例）
 ├── SKILL.md               # Agent Skill 入口
 └── MCP_INTEGRATION.md     # MCP 集成说明
 ```
