@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F5F5F5"/>
+      <stop offset="100%" stop-color="#E0E0E0"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <rect width="600" height="800" rx="28" fill="url(#bg)"/>
+
+  <!-- 顶部品牌条 -->
+  <rect x="0" y="0" width="600" height="88" rx="28" fill="#DA291C"/>
+  <rect x="0" y="60" width="600" height="28" fill="#DA291C"/>
+  <text x="36" y="54" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="22" font-weight="700" fill="#FFC72C">麦麦积分精算局</text>
+  <text x="564" y="54" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="15" fill="#FFFFFF" opacity="0.9">抽奖军师 · 鉴定报告</text>
+
+  <!-- 主判定 -->
+  <text x="300" y="210" text-anchor="middle" font-size="96">⚖️</text>
+  <text x="300" y="300" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="56" font-weight="800" fill="#616161">欧非守恒</text>
+
+  <!-- 数据面板 -->
+  <g filter="url(#shadow)">
+    <rect x="60" y="340" width="480" height="250" rx="20" fill="#FFFFFF"/>
+  </g>
+
+  <text x="92" y="392" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="17" fill="#757575">抽奖次数</text>
+  <text x="508" y="392" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="26" font-weight="700" fill="#212121">8 次</text>
+
+  <text x="92" y="442" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="17" fill="#757575">奖品折算总价值</text>
+  <text x="508" y="442" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="26" font-weight="700" fill="#212121">¥12.8</text>
+
+  <text x="92" y="492" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="17" fill="#757575">消耗积分机会成本</text>
+  <text x="508" y="492" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="26" font-weight="700" fill="#212121">¥6.1</text>
+
+  <!-- 回收率条 -->
+  <text x="92" y="536" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="17" fill="#757575">回收率</text>
+  <text x="532" y="536" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="22" font-weight="700" fill="#2E7D32">209%</text>
+  <rect x="92" y="548" width="440" height="18" rx="9" fill="#EEEEEE"/>
+  <rect x="92" y="548" width="440" height="18" rx="9" fill="#2E7D32"/>
+  <line x1="385" y1="542" x2="385" y2="572"
+        stroke="#9E9E9E" stroke-width="2" stroke-dasharray="4,3"/>
+  <text x="385" y="592" text-anchor="middle"
+        font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="12" fill="#9E9E9E">100% 回本线</text>
+
+  <!-- 点评（自动换行，最多 3 行） -->
+  <text x="300" y="640" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#424242">回本了（净赚 ¥6.70），主要靠保底积分档，属于正常波动；另有 1 </text>
+  <text x="300" y="668" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#424242">张券过期未用，价值已计 ¥0</text>
+
+  <!-- 页脚 -->
+  <line x1="60" y1="700" x2="540" y2="700" stroke="#BDBDBD" stroke-width="1" opacity="0.6"/>
+  <text x="60" y="730" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="13" fill="#757575">活动：麦麦积分抽奖 · 有效券 2 张（1 张已过期计 ¥0）</text>
+  <text x="60" y="756" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="12" fill="#9E9E9E">基于麦当劳 MCP 数据 · 估值口径：面值×使用概率−诱导消费 · 非官方产品</text>
+</svg>

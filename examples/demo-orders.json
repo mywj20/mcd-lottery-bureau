@@ -1,0 +1,22 @@
+{
+  "_note": "示例订单数据，结构对齐麦当劳 MCP order-list 的返回（[{hasNext, lastId, list:[...]}]）。用于推算点餐频率与客单价。",
+  "success": true,
+  "code": 200,
+  "data": [
+    {
+      "hasNext": false,
+      "lastId": 0,
+      "list": [
+        { "orderId": "o-101", "orderTime": "2026-09-18 12:31:00", "totalAmount": "42.0", "orderStatusTitle": "已完成" },
+        { "orderId": "o-102", "orderTime": "2026-09-22 18:05:00", "totalAmount": "35.5", "orderStatusTitle": "已完成" },
+        { "orderId": "o-103", "orderTime": "2026-09-25 12:44:00", "totalAmount": "28.0", "orderStatusTitle": "已完成" },
+        { "orderId": "o-104", "orderTime": "2026-09-29 19:12:00", "totalAmount": "51.0", "orderStatusTitle": "已完成" },
+        { "orderId": "o-105", "orderTime": "2026-10-02 12:20:00", "totalAmount": "33.0", "orderStatusTitle": "已完成" },
+        { "orderId": "o-106", "orderTime": "2026-10-05 13:01:00", "totalAmount": "26.5", "orderStatusTitle": "已完成" },
+        { "orderId": "o-107", "orderTime": "2026-10-08 18:47:00", "totalAmount": "44.0", "orderStatusTitle": "已完成" },
+        { "orderId": "o-108", "orderTime": "2026-10-11 12:15:00", "totalAmount": "31.5", "orderStatusTitle": "已完成" },
+        { "orderId": "o-109", "orderTime": "2026-10-13 12:38:00", "totalAmount": "38.0", "orderStatusTitle": "已完成" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+# 统一换行符为 LF —— 保证 CONTEST_DECLARATION.md 与官方文件字节一致
+# （参赛要求该文件内容不可改动，换行符转换会造成字节差异）
+* text=auto eol=lf
+
+# 二进制文件不转换
+*.png binary
+*.gif binary
+*.jpg binary
+*.ico binary

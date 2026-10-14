@@ -1,0 +1,18 @@
+{
+  "_note": "示例账户数据，字段结构与麦当劳 MCP query-my-account 真实返回一致（2026-10-12 实测校准）。数值为演示用途。",
+  "success": true,
+  "code": 200,
+  "message": "请求成功",
+  "data": {
+    "availablePoint": "3280.5",
+    "accountId": "02007421*****************7704",
+    "accumulativePoint": "12045.3",
+    "currency": "麦享会积分",
+    "currentMouthExpirePoint": "412.0",
+    "expiredPoint": "866.5",
+    "frozenPoint": "0",
+    "lastMouthExpirePoint": "0",
+    "nextMouthExpirePoint": "318.2",
+    "usedPoint": "7900"
+  }
+}

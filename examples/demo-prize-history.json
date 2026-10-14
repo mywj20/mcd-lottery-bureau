@@ -1,0 +1,23 @@
+{
+  "_note": "示例中奖记录，结构对齐麦当劳 MCP query-my-prizes 的返回。用于欧皇鉴定演示。",
+  "success": true,
+  "code": 200,
+  "data": {
+    "status": { "code": "SUCCESS", "message": "成功" },
+    "prizes": [
+      { "id": "p1", "name": "30积分", "prizeType": "POINTS", "recordTime": "2026-10-13 12:45:00", "statusText": "已发放" },
+      { "id": "p2", "name": "30积分", "prizeType": "POINTS", "recordTime": "2026-10-12 12:20:00", "statusText": "已发放" },
+      { "id": "p3", "name": "下单立减2元券", "prizeType": "COUPON", "recordTime": "2026-10-11 19:02:00", "statusText": "待使用" },
+      { "id": "p4", "name": "30积分", "prizeType": "POINTS", "recordTime": "2026-10-10 12:55:00", "statusText": "已发放" },
+      { "id": "p5", "name": "麦旋风5折", "prizeType": "COUPON", "recordTime": "2026-10-09 18:30:00", "statusText": "已使用" },
+      { "id": "p6", "name": "30积分", "prizeType": "POINTS", "recordTime": "2026-10-08 12:10:00", "statusText": "已发放" },
+      { "id": "p7", "name": "30积分", "prizeType": "POINTS", "recordTime": "2026-10-07 12:33:00", "statusText": "已发放" },
+      { "id": "p8", "name": "下单立减3元券", "prizeType": "COUPON", "recordTime": "2026-10-06 12:05:00", "statusText": "已过期" }
+    ],
+    "pageNum": 1,
+    "pageSize": 50,
+    "hasMore": false,
+    "nextCursor": null,
+    "truncated": false
+  }
+}
