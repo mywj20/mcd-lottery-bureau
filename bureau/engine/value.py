@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+import math
+
 # 积分折算锚点：每 100 积分的商城最优兑现价值（元）。
 # 2026-10-12 实测：商城最优出口 3.20 元/100分（50分换 6.9 元派），
 # 最差出口 1.64 元/100分（800分换巨无霸组合）。默认取最优口径，
@@ -101,17 +103,41 @@ def value_prize(prize: dict, profile: dict, point_value_per_100: float) -> dict:
     """
     kind = prize.get("kind", "other")
     name = prize.get("name", "未知奖品")
-    valid_days = int(prize.get("valid_days") or 7)
+    required = {"points": ("points",), "cash_coupon": ("face_value",),
+                "discount_coupon": ("reference_price", "discount")}.get(kind, ())
+    known = bool(required) and all(
+        isinstance(prize.get(key), (int, float)) and not isinstance(prize.get(key), bool)
+        and math.isfinite(prize[key]) and prize[key] >= 0 for key in required)
+    if kind == "discount_coupon" and known:
+        known = prize["discount"] <= 1
+    if not known:
+        return {"name": name, "kind": kind, "face_value": 0.0, "unit": "—",
+                "use_prob": 0.0, "gross": 0.0, "penalty": 0.0, "net_value": 0.0,
+                "lower_bound_value": None, "lower_bound_points": None,
+                "valuation_known": False, "formula": "估值未知，按 ¥0 展示但不可证明保障"}
+    valid_days = int(prize.get("valid_days") if prize.get("valid_days") is not None else 7)
+    if prize.get("_expired"):
+        valid_days = 0
     opw = float(profile.get("orders_per_week") or 0.0)
     use_prob = estimate_use_probability(opw, valid_days)
     avg_order = float(profile.get("avg_order_value") or 0.0)
     unit = point_unit_value(point_value_per_100)
+    threshold_note = ""
+    if kind in ("cash_coupon", "discount_coupon") and "min_spend" in prize:
+        threshold = prize["min_spend"]
+        # ponytail: 没有订单金额分布，不估计达标率；需真实达标订单分布才提高使用概率。
+        if threshold is None or not isinstance(threshold, (int, float)) \
+                or not math.isfinite(threshold) or threshold < 0 or threshold > avg_order:
+            use_prob = 0.0
+            threshold_note = "；满减门槛未知或高于客单价，按零使用概率保守计"
 
     if kind == "points":
         pts = float(prize.get("points") or 0)
         net = pts * unit
         return {
-            "name": name, "kind": kind,
+            "name": name, "kind": kind, "points": pts,
+            "lower_bound_points": max(pts, 0.0), "lower_bound_value": max(net, 0.0),
+            "valuation_known": pts >= 0,
             "face_value": pts, "unit": "积分",
             "use_prob": 1.0, "gross": net, "penalty": 0.0, "net_value": net,
             "formula": "%g 积分 × %.4f 元/分" % (pts, unit),
@@ -124,24 +150,26 @@ def value_prize(prize: dict, profile: dict, point_value_per_100: float) -> dict:
         net = max(gross - penalty, 0.0)
         return {
             "name": name, "kind": kind,
+            "lower_bound_value": 0.0, "lower_bound_points": 0.0, "valuation_known": True,
             "face_value": face, "unit": "元",
             "use_prob": use_prob, "gross": gross, "penalty": penalty, "net_value": net,
             "formula": "面值 ¥%.2f × 使用概率 %.0f%% − 诱导消费扣减 ¥%.2f"
-                       % (face, use_prob * 100, penalty),
+                       % (face, use_prob * 100, penalty) + threshold_note,
         }
 
     if kind == "discount_coupon":
         ref = float(prize.get("reference_price") or 0)
-        disc = float(prize.get("discount") or 1.0)
+        disc = float(prize["discount"])
         gross = value_discount_coupon(ref, disc, use_prob)
         penalty = induced_spending_penalty(avg_order, use_prob, opw)
         net = max(gross - penalty, 0.0)
         return {
             "name": name, "kind": kind,
+            "lower_bound_value": 0.0, "lower_bound_points": 0.0, "valuation_known": True,
             "face_value": ref * (1 - disc), "unit": "元",
             "use_prob": use_prob, "gross": gross, "penalty": penalty, "net_value": net,
             "formula": "原价 ¥%.2f × 折扣力度 %.0f%% × 使用概率 %.0f%% − 扣减 ¥%.2f"
-                       % (ref, (1 - disc) * 100, use_prob * 100, penalty),
+                       % (ref, (1 - disc) * 100, use_prob * 100, penalty) + threshold_note,
         }
 
     # 无法归类的奖品：按 0 计，宁可低估，绝不臆造

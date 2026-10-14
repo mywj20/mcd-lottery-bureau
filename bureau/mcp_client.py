@@ -89,49 +89,69 @@ class MCPClient:
         except urllib.error.URLError as e:
             raise MCPError("网络错误: %s（离线环境请使用 demo 模式）" % e.reason)
 
-        return self._parse_response(raw)
+        return self._parse_response(raw, payload["id"])
 
     # ──────────────────────────────────────────────────────
 
-    def _parse_response(self, raw: str) -> dict:
-        """解析响应：兼容 SSE 与纯 JSON 两种形态。"""
-        text = raw.strip()
-
-        # 形态一：SSE（data: {...} 逐行）
-        if text.startswith("event:") or text.startswith("data:"):
-            chunks = []
-            for line in text.splitlines():
-                if line.startswith("data:"):
-                    chunks.append(line[5:].strip())
-            text = "\n".join(chunks).strip()
-
-        # 到这里应该是一个 JSON-RPC 响应
-        try:
-            envelope = json.loads(text)
-        except json.JSONDecodeError:
-            # 形态二：非 JSON-RPC 包裹，直接在文本里找业务 JSON
-            extracted = self._extract_json(text)
-            if extracted is not None:
-                return extracted
-            raise MCPError("无法解析 MCP 响应：%s" % raw[:200])
-
-        if isinstance(envelope, dict) and "error" in envelope:
-            err = envelope["error"]
-            raise MCPError("MCP 错误: %s" % err.get("message", err))
-
-        # JSON-RPC result.content[0].text 里通常嵌着业务 JSON
+    def _parse_response(self, raw: str, request_id=None) -> dict:
+        """逐事件解析 SSE，跳过进度通知与其他请求；结构化结果优先。"""
+        text = raw.lstrip("\ufeff").strip()
+        if any(line.startswith(("data:", "event:", ":", "id:", "retry:")) for line in text.splitlines()):
+            envelopes, chunks = [], []
+            for line in text.splitlines() + [""]:
+                if not line:
+                    if chunks:
+                        try:
+                            envelopes.append(json.loads("\n".join(chunks)))
+                        except json.JSONDecodeError:
+                            raise MCPError("SSE 事件不是有效 JSON") from None
+                        chunks = []
+                elif line.startswith("data:"):
+                    value = line[5:]
+                    chunks.append(value[1:] if value.startswith(" ") else value)
+            matches = [item for item in envelopes if isinstance(item, dict)
+                       and ("result" in item or "error" in item)
+                       and "id" in item and (request_id is None or item["id"] == request_id)]
+            if len(matches) != 1:
+                raise MCPError("SSE 缺少唯一匹配请求 ID 的响应")
+            envelope = matches[0]
+        else:
+            try:
+                envelope = json.loads(text)
+            except json.JSONDecodeError:
+                envelope = self._extract_json(text)
+                if envelope is None:
+                    raise MCPError("无法解析 MCP 响应") from None
+        if not isinstance(envelope, dict):
+            raise MCPError("MCP 响应必须为对象")
+        if "jsonrpc" in envelope:
+            if request_id is not None and envelope.get("id") != request_id:
+                raise MCPError("MCP 响应请求 ID 不匹配")
+            if "result" not in envelope and "error" not in envelope:
+                raise MCPError("MCP 响应缺少 result")
+        if "error" in envelope:
+            # 不转印服务端文本，避免错误响应回显凭据。
+            raise MCPError("MCP JSON-RPC 调用失败")
         result = envelope.get("result", envelope)
-        if isinstance(result, dict) and "content" in result:
+        if not isinstance(result, dict):
+            raise MCPError("MCP result 必须为对象")
+        if "isError" in result and result["isError"] is not False:
+            raise MCPError("MCP Tool 返回 isError 或无效错误标记")
+        if "structuredContent" in result:
+            structured = result["structuredContent"]
+            if not isinstance(structured, dict):
+                raise MCPError("MCP structuredContent 必须为对象")
+            return structured
+        if "content" in result:
             content = result["content"]
-            if isinstance(content, list) and content:
-                first = content[0]
-                if isinstance(first, dict) and "text" in first:
-                    extracted = self._extract_json(first["text"])
-                    if extracted is not None:
+            if not isinstance(content, list):
+                raise MCPError("MCP content 必须为数组")
+            for part in content:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    extracted = self._extract_json(part["text"])
+                    if isinstance(extracted, dict):
                         return extracted
-                    return {"_raw_text": first["text"]}
-        if isinstance(result, dict) and "structuredContent" in result:
-            return result["structuredContent"]
+            raise MCPError("MCP content 缺少业务 JSON 对象")
         return result
 
     @staticmethod

@@ -45,11 +45,17 @@ def render_terminal(result: dict) -> str:
     out.append("╚" + "═" * 60 + "╝")
     out.append("")
 
+    out.append("来源：%s" % result.get("source_label", "来源未标注"))
+    out.append("【结论】%s" % decision.get("label", "数据不足"))
+    for reason in decision.get("reasons", []):
+        out.append("  · " + reason)
+    out.append("")
+
     # ── 资产概览 ──
     out.append("【积分资产】")
     out.append("  可用积分        %s" % _fmt_int(acct.get("available")))
     if acct.get("expire_this_month"):
-        out.append("  ⚠ 本月将过期    %s   ← 止损优先级最高" % _fmt_int(acct.get("expire_this_month")))
+        out.append("  ⚠ 本月将过期    %s   ← 优先比较官方兑换，非必须抽奖" % _fmt_int(acct.get("expire_this_month")))
     if acct.get("expire_next_month"):
         out.append("  下月将过期      %s" % _fmt_int(acct.get("expire_next_month")))
     if acct.get("expired"):
@@ -71,16 +77,16 @@ def render_terminal(result: dict) -> str:
 
     # ── 保底回血 ──
     if floor.get("ok"):
-        out.append("【保底回血】—— 与概率无关的确定值")
+        out.append("【最低档模型估值】—— 非实际收益保底")
         out.append("  最差一档        %s（折算 ¥%.2f）"
                    % (_truncate(floor.get("min_prize_name", "—"), 16), floor["min_value"]))
         out.append("  单次成本        ¥%.2f（%g 积分机会成本）"
                    % (floor["cost"], a.get("draw_points") or 0))
         bar = _bar(floor["recovery"])
-        out.append("  保底回血率      %s %.0f%%" % (bar, floor["recovery"] * 100))
+        out.append("  模型估值回收率  %s %.0f%%" % (bar, floor["recovery"] * 100))
         if floor.get("rate_invariant"):
             out.append("                  ⓘ 最差档为积分奖，此比值与积分汇率假设无关")
-        out.append("                  ⓘ 前提：奖池外无『谢谢参与』空奖档（官方未公示）")
+        out.append("                  ⓘ 仅列出奖项；空奖、用券失败与参照价变化均未排除，不能保证回本")
         out.append("")
 
     # ── 情景分析 ──
@@ -98,7 +104,7 @@ def render_terminal(result: dict) -> str:
 
     # ── 结果区间 ──
     if rng.get("ok"):
-        out.append("【单次结果区间】—— 数学边界（任何概率分布都在此区间内）")
+        out.append("【列出奖项的单次模型估值区间】—— 非实际收益边界")
         out.append("  最差            %+.2f 元（%s）" % (rng["worst_net"], rng.get("worst_prize", "只中最低档")))
         out.append("  最好            %+.2f 元（%s）" % (rng["best_net"], rng.get("best_prize", "中最高档")))
         out.append("")
@@ -115,7 +121,7 @@ def render_terminal(result: dict) -> str:
             else:
                 out.append("  诱导消费扣减    有（低频用户，部分用券属于『为券加单』）")
         else:
-            out.append("  点餐频率        未知 → 按默认画像估算（可在报告末尾修正）")
+            out.append("  点餐频率        未知 → 默认假设 1 次/周、客单 ¥35（非个性化验证）")
             out.append("  说明：券的价值 = 面值 × 你会用掉的概率 − 诱导消费扣减")
         out.append("")
 
@@ -131,16 +137,8 @@ def render_terminal(result: dict) -> str:
             out.append("  " + _pad(name, 26) + _pad(val, 10, "right") + "  " + _truncate(note, 30))
         out.append("")
 
-    # ── 最终建议 ──
-    out.append("╔" + "═" * 60 + "╗")
-    label = decision.get("label", "—")
-    stance_icon = {"must_draw": "⏰", "draw": "✅", "small": "🎲",
-                   "avoid": "🛑", "cannot_draw": "🚧"}.get(
-        decision.get("stance", ""), "•")
-    out.append("║  %s 结论：%s" % (stance_icon, _pad(label, 50)) + "║")
-    out.append("╚" + "═" * 60 + "╝")
-    for r in decision.get("reasons", []):
-        out.append("  · " + r)
+    out.append("积分折算率：¥%.2f/100 分（默认或用户指定假设，非现金）。" % result.get("point_rate", 0))
+    out.append("券有效期与折扣参照价缺失时使用标注的假设；不代表当前门店价格。")
     out.append("")
 
     return "\n".join(out)
@@ -162,8 +160,8 @@ def render_luck_card(audit: dict, activity_name: str = "麦麦积分抽奖") -> 
     """生成欧皇/非酋鉴定卡 SVG（600×800，适合截图分享）。"""
     style = LUCK_STYLES.get(audit.get("verdict", "insufficient"), LUCK_STYLES["insufficient"])
     label = audit.get("label", "—")
-    comment = audit.get("comment", "")
-    n = audit.get("n_draws", 0)
+    label_size = min(56, int(480 / max(_w(label) / 2, 1)))
+    n = audit.get("n_records", audit.get("n_draws", 0))
     recovery = audit.get("recovery", 0.0)
     total_value = audit.get("total_value", 0.0)
     total_cost = audit.get("total_cost", 0.0)
@@ -171,6 +169,9 @@ def render_luck_card(audit: dict, activity_name: str = "麦麦积分抽奖") -> 
     coupon_hits = audit.get("coupon_hits", 0)
     expired_coupons = audit.get("expired_coupons", 0)
     expired_note = "（%d 张已过期计 ¥0）" % expired_coupons if expired_coupons else ""
+    source = audit.get("source_label", "来源未标注")
+    period = audit.get("period", "记录期间未知")
+    profile_note = audit.get("profile_note", "画像来源未知")
 
     # 回收率进度条（上限 150% 显示）
     bar_max = 1.5
@@ -180,8 +181,11 @@ def render_luck_card(audit: dict, activity_name: str = "麦麦积分抽奖") -> 
 
     recovery_color = "#2E7D32" if recovery >= 1.0 else ("#F57C00" if recovery >= 0.6 else "#C62828")
 
-    # 点评自动换行（按视觉宽度，每行约 30 个全角字符）
-    comment_lines = _svg_text_lines(comment, x=300, start_y=640, max_width=31, line_height=28)
+    comment = "样本折算差额 %+.2f 元，不是实际收益。" % (total_value - total_cost)
+    if expired_coupons:
+        comment += "%d 张过期券估值为零。" % expired_coupons
+    comment_lines = _svg_text_lines(comment, x=300, start_y=631, max_width=31, line_height=25,
+                                    max_lines=2)
 
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
   <defs>
@@ -204,10 +208,13 @@ def render_luck_card(audit: dict, activity_name: str = "麦麦积分抽奖") -> 
   <text x="564" y="54" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
         font-size="15" fill="#FFFFFF" opacity="0.9">抽奖军师 · 鉴定报告</text>
 
+  <text x="300" y="119" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="16" font-weight="700" fill="#616161">{html.escape(source)}</text>
+
   <!-- 主判定 -->
   <text x="300" y="210" text-anchor="middle" font-size="96">{style['emoji']}</text>
   <text x="300" y="300" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="56" font-weight="800" fill="{style['accent']}">{html.escape(label)}</text>
+        font-size="{label_size}" font-weight="800" fill="{style['accent']}">{html.escape(label)}</text>
 
   <!-- 数据面板 -->
   <g filter="url(#shadow)">
@@ -215,23 +222,23 @@ def render_luck_card(audit: dict, activity_name: str = "麦麦积分抽奖") -> 
   </g>
 
   <text x="92" y="392" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="17" fill="#757575">抽奖次数</text>
+        font-size="17" fill="#757575">样本奖品记录（非抽奖次数）</text>
   <text x="508" y="392" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="26" font-weight="700" fill="#212121">{n} 次</text>
+        font-size="26" font-weight="700" fill="#212121">{n} 条</text>
 
   <text x="92" y="442" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="17" fill="#757575">奖品折算总价值</text>
+        font-size="17" fill="#757575">奖品模型估值合计</text>
   <text x="508" y="442" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
         font-size="26" font-weight="700" fill="#212121">¥{total_value:.1f}</text>
 
   <text x="92" y="492" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="17" fill="#757575">消耗积分机会成本</text>
+        font-size="17" fill="#757575">按当前价格估算样本成本</text>
   <text x="508" y="492" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
         font-size="26" font-weight="700" fill="#212121">¥{total_cost:.1f}</text>
 
   <!-- 回收率条 -->
   <text x="92" y="536" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="17" fill="#757575">回收率</text>
+        font-size="17" fill="#757575">样本估算回收率（非现金收益）</text>
   <text x="532" y="536" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
         font-size="22" font-weight="700" fill="{recovery_color}">{recovery * 100:.0f}%</text>
   <rect x="92" y="548" width="{bar_w}" height="18" rx="9" fill="#EEEEEE"/>
@@ -239,17 +246,21 @@ def render_luck_card(audit: dict, activity_name: str = "麦麦积分抽奖") -> 
   <line x1="{92 + baseline_x:.0f}" y1="542" x2="{92 + baseline_x:.0f}" y2="572"
         stroke="#9E9E9E" stroke-width="2" stroke-dasharray="4,3"/>
   <text x="{92 + baseline_x:.0f}" y="592" text-anchor="middle"
-        font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="12" fill="#9E9E9E">100% 回本线</text>
+        font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="12" fill="#616161">100% 估值成本比</text>
 
   <!-- 点评（自动换行，最多 3 行） -->
 {comment_lines}
 
   <!-- 页脚 -->
-  <line x1="60" y1="700" x2="540" y2="700" stroke="#BDBDBD" stroke-width="1" opacity="0.6"/>
-  <text x="60" y="730" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="13" fill="#757575">活动：{html.escape(activity_name)} · 有效券 {coupon_hits} 张{expired_note}</text>
-  <text x="60" y="756" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="12" fill="#9E9E9E">基于麦当劳 MCP 数据 · 估值口径：面值×使用概率−诱导消费 · 非官方产品</text>
+  <line x1="60" y1="675" x2="540" y2="675" stroke="#BDBDBD" stroke-width="1" opacity="0.6"/>
+  <text x="60" y="699" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="13" font-weight="700" fill="#616161">{html.escape(source)} · {html.escape(_truncate(profile_note, 14))}</text>
+  <text x="60" y="721" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="12" fill="#616161">期间：{html.escape(period)} · 当前单抽价估算，非真实历史成本</text>
+  <text x="60" y="743" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="12" fill="#616161">仅采集单页最多50条奖品，非全量历史；不推断中奖概率</text>
+  <text x="60" y="765" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="12" fill="#616161">活动：{html.escape(_truncate(activity_name, 16))} · 券估值含使用假设 · 非官方产品</text>
 </svg>'''
     return svg
 
@@ -272,7 +283,7 @@ def render_markdown(result: dict) -> str:
     L = []
     L.append("# 麦麦积分精算报告")
     L.append("")
-    L.append("> 由 **麦麦积分精算局 · 抽奖军师** 生成｜基于麦当劳中国 MCP 数据")
+    L.append("> 由 **麦麦积分精算局 · 抽奖军师** 生成｜%s" % result.get("source_label", "来源未标注"))
     L.append("")
 
     # 结论前置
@@ -304,21 +315,20 @@ def render_markdown(result: dict) -> str:
     L.append("- 活动：%s（%s）" % (a.get("name", "—"), a.get("status", "—")))
     L.append("- 单次消耗：**%g 积分**" % (a.get("draw_points") or 0))
     L.append("- 奖池规模：%d 档" % len(prizes))
-    L.append("- 概率公示：**无**（官方未公示 → 本报告使用确定值模型，不编造概率）")
+    L.append("- 概率公示：**%s**；情景是假设，不是实际中奖概率。" % ("有" if result.get("probability_disclosed") else "无"))
     L.append("")
 
-    # 保底
     if floor.get("ok"):
-        L.append("## 保底回血（与概率无关的确定值）")
+        L.append("## 最低档模型估值（非实际收益保底）")
         L.append("")
-        L.append("最差一档 **%s** 折算 ¥%.2f，单次成本 ¥%.2f，**保底回血率 %.0f%%**"
+        L.append("列出奖项中最低估值 **%s** 为 ¥%.2f，单次假设成本 ¥%.2f，**模型估值回收率 %.0f%%**。"
                  % (floor.get("min_prize_name", "—"), floor["min_value"],
                     floor["cost"], floor["recovery"] * 100))
         L.append("")
         if floor.get("rate_invariant"):
-            L.append("> ⓘ 最差档为积分奖，此比值与积分汇率假设无关。")
+            L.append("> 该项为积分奖，积分比与折算率无关；不证明实际奖池完整。")
             L.append("")
-        L.append("> ⓘ 前提：奖池外无『谢谢参与』空奖档（官方未公示）。")
+        L.append("> 券未使用时节省可为零；空奖未排除，不能保证回本。")
         L.append("")
 
     # 情景分析
@@ -328,18 +338,18 @@ def render_markdown(result: dict) -> str:
         L.append("")
         L.append("**%s**" % sc.get("note", ""))
         L.append("")
-        L.append("| 情景 | 假设 | 单次期望 |")
+        L.append("| 情景 | 假设 | 单次模型净期望（已扣成本） |")
         L.append("| --- | --- | ---: |")
         L.append("| 悲观 | 90%% 概率中最低档 | %+.2f 元 |" % sc.get("net_pessimistic", 0))
         L.append("| 均分 | 所有档位等概率（假想） | %+.2f 元 |" % sc.get("net_uniform", 0))
-        L.append("| 成本线 | — | -%.2f 元 |" % sc.get("cost", 0))
+        L.append("| 模型回本线 | 净收益为零 | 0.00 元 |")
         L.append("")
         L.append("> %s" % sc.get("assumption_note", ""))
         L.append("")
 
     # 区间
     if rng.get("ok"):
-        L.append("## 单次结果区间")
+        L.append("## 列出奖项的单次模型估值区间（非实际收益边界）")
         L.append("")
         L.append("- 最差：%+.2f 元（%s）" % (rng["worst_net"], rng.get("worst_prize", "—")))
         L.append("- 最好：%+.2f 元（%s）" % (rng["best_net"], rng.get("best_prize", "—")))
@@ -355,7 +365,8 @@ def render_markdown(result: dict) -> str:
         else:
             L.append("点餐频率未知，按默认画像估算（1 次/周、客单价 ¥35）")
         L.append("")
-        L.append("> 券的价值 = 面值 × 使用概率 − 诱导消费扣减。")
+        L.append("> 券的模型估值 = 可节省金额 × 使用概率 − 诱导消费扣减，不是已实现收益。")
+        L.append("> 积分折算率 ¥%.2f/100 分为默认或指定假设，非现金兑付价；缺少有效期时假设 7 天，折扣餐品采用静态参照价，非实时门店价格。" % result.get("point_rate", 0))
         L.append("")
 
     # 奖品明细
@@ -373,7 +384,13 @@ def render_markdown(result: dict) -> str:
     if audit and audit.get("ok"):
         L.append("## 欧皇鉴定")
         L.append("")
-        L.append("**%s**（%d 次抽奖，回收率 %.0f%%）" % (audit["label"], audit["n_draws"], audit["recovery"] * 100))
+        L.append("**%s**（%d 条奖品记录，样本估算回收率 %.0f%%，非现金收益）"
+                 % (audit["label"], audit.get("n_records", audit["n_draws"]), audit["recovery"] * 100))
+        L.append("")
+        L.append("- 来源：%s；期间：%s；%s。" % (audit.get("source_label", "来源未标注"),
+                 audit.get("period", "记录期间未知"), audit.get("profile_note", "画像来源未知")))
+        L.append("- %s" % audit.get("sample_note", "仅奖品记录，非全量抽奖历史。"))
+        L.append("- %s" % audit.get("cost_note", "历史成本按当前单抽价估算。"))
         L.append("")
         L.append("> %s" % audit["comment"])
         L.append("")

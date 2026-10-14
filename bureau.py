@@ -5,7 +5,7 @@
     python bureau.py demo                     # 零配置演示（内置示例数据）
     python bureau.py check                    # 真实模式：读取你的积分账户与抽奖活动
     python bureau.py luck                     # 欧皇鉴定（读取历史中奖记录）
-    python bureau.py card --out luck.svg      # 生成鉴定卡 SVG
+    python bureau.py luck --out luck.svg      # 生成鉴定卡 SVG（真实模式）
     python bureau.py check --json             # 输出结构化 JSON
 
 真实模式前置条件（二选一）：
@@ -43,7 +43,7 @@ def analyze(account: dict, lottery_raw: dict, orders: dict = None,
     prizes = norm["prizes"]
 
     # 积分机会成本锚点：优先用商城实测汇率，否则用保守默认
-    point_rate = mall_rate if mall_rate else val_engine.DEFAULT_POINT_VALUE_PER_100
+    point_rate = mall_rate if mall_rate is not None else val_engine.DEFAULT_POINT_VALUE_PER_100
     point_unit = val_engine.point_unit_value(point_rate)
 
     # 用户画像（订单 → 频率/客单价/消费基线）
@@ -89,6 +89,12 @@ def analyze(account: dict, lottery_raw: dict, orders: dict = None,
             history_valued.append(v)
         audit = lot_engine.luck_audit(history_valued, draw_points, point_unit)
         audit["activity_name"] = activity.get("name", "")
+        record_times = sorted(str(h.get("record_time"))[:10] for h in prize_history
+                              if h.get("record_time"))
+        audit["period"] = ("%s 至 %s" % (record_times[0], record_times[-1])
+                           if record_times else "记录期间未知")
+        audit["profile_note"] = ("订单画像" if profile.get("_source") == "estimated_from_orders"
+                                 else "默认画像（非个性化验证）")
 
     return {
         "activity": activity,
@@ -163,9 +169,17 @@ def load_real_data(client: mcp_client.MCPClient) -> tuple:
 # 子命令
 # ══════════════════════════════════════════════════════════
 
+def _mark_source(result: dict, demo: bool) -> None:
+    label = "Demo 示例数据（非真实账户）" if demo else "麦当劳 MCP 账户数据"
+    result["source_label"] = label
+    if result.get("audit"):
+        result["audit"]["source_label"] = label
+
+
 def cmd_demo(args) -> int:
     account, lottery, orders, history = load_demo_data()
     result = analyze(account, lottery, orders, history)
+    _mark_source(result, True)
     _output(result, args)
     return 0
 
@@ -180,6 +194,7 @@ def cmd_check(args) -> int:
         return 1
     account, lottery, orders, history = load_real_data(client)
     result = analyze(account, lottery, orders, history)
+    _mark_source(result, False)
     _output(result, args)
     return 0
 
@@ -193,17 +208,15 @@ def cmd_luck(args) -> int:
         if not client.available():
             print("❌ 未配置 MCD_MCP_TOKEN（或用 --demo 跑示例）", file=sys.stderr)
             return 1
-        account = normalize.normalize_account(mcp_client.collect_account(client))
-        lottery = mcp_client.collect_lottery(client)
-        orders = None
-        history = normalize.normalize_prizes_history(mcp_client.collect_prizes(client))
+        account, lottery, orders, history = load_real_data(client)
 
     result = analyze(account, lottery, orders, history)
+    _mark_source(result, args.demo)
     audit = result.get("audit")
     if not audit or not audit.get("ok"):
         reason = (audit or {}).get("reason", "无中奖记录")
         print("🔬 暂时无法鉴定：%s" % reason)
-        print("   （鉴定需要至少 1 条历史中奖记录，抽几次后再来）")
+        print("   （无可分析样本；无需为生成卡片额外抽奖。）")
         return 0
 
     # 终端鉴定
@@ -211,10 +224,14 @@ def cmd_luck(args) -> int:
     print("╔" + "═" * 52 + "╗")
     print("║" + render._pad("  欧皇鉴定 · " + audit["label"], 50) + "  ║")
     print("╚" + "═" * 52 + "╝")
-    print("  抽奖次数        %d 次" % audit["n_draws"])
-    print("  奖品总价值      ¥%.2f" % audit["total_value"])
-    print("  积分机会成本    ¥%.2f" % audit["total_cost"])
-    print("  回收率          %.0f%%" % (audit["recovery"] * 100))
+    print("  来源            %s" % audit["source_label"])
+    print("  奖品记录        %d 条（非完整抽奖次数）" % audit.get("n_records", audit["n_draws"]))
+    print("  奖品估值合计    ¥%.2f" % audit["total_value"])
+    print("  假设机会成本    ¥%.2f" % audit["total_cost"])
+    print("  样本估算回收率  %.0f%%" % (audit["recovery"] * 100))
+    print("  期间 / 画像     %s / %s" % (audit["period"], audit["profile_note"]))
+    print("  %s" % audit.get("sample_note", ""))
+    print("  %s" % audit.get("cost_note", ""))
     print("  券类命中        %d 次（%.0f%%）" % (audit["coupon_hits"], audit["observed_coupon_rate"] * 100))
     print()
     print("  %s" % audit["comment"])
@@ -286,7 +303,11 @@ def main(argv=None) -> int:
     if not args.command:
         parser.print_help()
         return 0
-    return args.func(args)
+    try:
+        return args.func(args)
+    except (mcp_client.MCPError, ValueError) as exc:
+        print("本次无法分析：%s" % exc, file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

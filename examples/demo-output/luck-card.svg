@@ -19,10 +19,13 @@
   <text x="564" y="54" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
         font-size="15" fill="#FFFFFF" opacity="0.9">抽奖军师 · 鉴定报告</text>
 
+  <text x="300" y="119" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="16" font-weight="700" fill="#616161">Demo 示例数据（非真实账户）</text>
+
   <!-- 主判定 -->
   <text x="300" y="210" text-anchor="middle" font-size="96">⚖️</text>
   <text x="300" y="300" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="56" font-weight="800" fill="#616161">欧非守恒</text>
+        font-size="48" font-weight="800" fill="#616161">样本估值覆盖假设成本</text>
 
   <!-- 数据面板 -->
   <g filter="url(#shadow)">
@@ -30,23 +33,23 @@
   </g>
 
   <text x="92" y="392" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="17" fill="#757575">抽奖次数</text>
+        font-size="17" fill="#757575">样本奖品记录（非抽奖次数）</text>
   <text x="508" y="392" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="26" font-weight="700" fill="#212121">8 次</text>
+        font-size="26" font-weight="700" fill="#212121">8 条</text>
 
   <text x="92" y="442" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="17" fill="#757575">奖品折算总价值</text>
+        font-size="17" fill="#757575">奖品模型估值合计</text>
   <text x="508" y="442" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
         font-size="26" font-weight="700" fill="#212121">¥12.8</text>
 
   <text x="92" y="492" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="17" fill="#757575">消耗积分机会成本</text>
+        font-size="17" fill="#757575">按当前价格估算样本成本</text>
   <text x="508" y="492" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
         font-size="26" font-weight="700" fill="#212121">¥6.1</text>
 
   <!-- 回收率条 -->
   <text x="92" y="536" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="17" fill="#757575">回收率</text>
+        font-size="17" fill="#757575">样本估算回收率（非现金收益）</text>
   <text x="532" y="536" text-anchor="end" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
         font-size="22" font-weight="700" fill="#2E7D32">209%</text>
   <rect x="92" y="548" width="440" height="18" rx="9" fill="#EEEEEE"/>
@@ -54,16 +57,19 @@
   <line x1="385" y1="542" x2="385" y2="572"
         stroke="#9E9E9E" stroke-width="2" stroke-dasharray="4,3"/>
   <text x="385" y="592" text-anchor="middle"
-        font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="12" fill="#9E9E9E">100% 回本线</text>
+        font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="12" fill="#616161">100% 估值成本比</text>
 
   <!-- 点评（自动换行，最多 3 行） -->
-  <text x="300" y="640" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#424242">回本了（净赚 ¥6.70），主要靠保底积分档，属于正常波动；另有 1 </text>
-  <text x="300" y="668" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#424242">张券过期未用，价值已计 ¥0</text>
+  <text x="300" y="631" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#424242">样本折算差额 +6.70 元，不是实际收益。1 张过期券估值为零。</text>
 
   <!-- 页脚 -->
-  <line x1="60" y1="700" x2="540" y2="700" stroke="#BDBDBD" stroke-width="1" opacity="0.6"/>
-  <text x="60" y="730" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="13" fill="#757575">活动：麦麦积分抽奖 · 有效券 2 张（1 张已过期计 ¥0）</text>
-  <text x="60" y="756" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="12" fill="#9E9E9E">基于麦当劳 MCP 数据 · 估值口径：面值×使用概率−诱导消费 · 非官方产品</text>
+  <line x1="60" y1="675" x2="540" y2="675" stroke="#BDBDBD" stroke-width="1" opacity="0.6"/>
+  <text x="60" y="699" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="13" font-weight="700" fill="#616161">Demo 示例数据（非真实账户） · 订单画像</text>
+  <text x="60" y="721" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="12" fill="#616161">期间：2026-10-06 至 2026-10-13 · 当前单抽价估算，非真实历史成本</text>
+  <text x="60" y="743" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="12" fill="#616161">仅采集单页最多50条奖品，非全量历史；不推断中奖概率</text>
+  <text x="60" y="765" font-family="'PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="12" fill="#616161">活动：麦麦积分抽奖 · 券估值含使用假设 · 非官方产品</text>
 </svg>
