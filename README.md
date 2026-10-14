@@ -120,6 +120,10 @@ python bureau.py check --md report.md    # 导出 Markdown 报告
 
 `python bureau.py luck` 生成 600×800 的鉴定卡（SVG，可截图分享）：
 
+<p align="center">
+  <img src="examples/demo-output/luck-card.png" alt="欧皇鉴定卡 · 示例" width="360"/>
+</p>
+
 | 欧皇 👑 | 欧非守恒 ⚖️ | 非酋 🌧️ |
 |---|---|---|
 | 净收益 ≥ 0 且券命中率 ≥ 30% | 净收益 ≥ 0 | 净收益 < 0 |
