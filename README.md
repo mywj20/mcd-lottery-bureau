@@ -77,7 +77,13 @@ python bureau.py demo
 
 ```bash
 # 1. 申请 MCP Token：https://open.mcd.cn/mcp
-# 2. 配置环境变量
+
+# 2. 配置 Token（二选一）
+#    方式一（推荐）：在项目根目录创建 .env 文件
+#    MCD_MCP_TOKEN=<你的 Token>
+#    （可复制 .env.example 改名；.env 已被 .gitignore 忽略，不会泄露）
+#
+#    方式二：环境变量
 export MCD_MCP_TOKEN=<你的 Token>        # Linux/macOS
 set MCD_MCP_TOKEN=<你的 Token>           # Windows
 

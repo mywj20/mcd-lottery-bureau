@@ -8,8 +8,11 @@
     python bureau.py card --out luck.svg      # 生成鉴定卡 SVG
     python bureau.py check --json             # 输出结构化 JSON
 
-真实模式前置条件：
-    export MCD_MCP_TOKEN=<你的 Token>   （Windows: set MCD_MCP_TOKEN=...）
+真实模式前置条件（二选一）：
+    方式一：环境变量
+        export MCD_MCP_TOKEN=<你的 Token>   （Windows: set MCD_MCP_TOKEN=...）
+    方式二：项目根目录创建 .env 文件（推荐，不会被 git 追踪）
+        MCD_MCP_TOKEN=<你的 Token>
     Token 申请：https://open.mcd.cn/mcp
 """
 
@@ -21,6 +24,32 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_dotenv():
+    """从项目根目录的 .env 文件加载环境变量（零依赖的极简实现）。
+
+    只在变量尚未设置时填充，不覆盖已有环境变量。
+    .env 已加入 .gitignore，不会被提交。
+    """
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.exists(env_path):
+        return
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key, value = key.strip(), value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except OSError:
+        pass
+
+
+_load_dotenv()
 
 from bureau import mcp_client, normalize, render
 from bureau.engine import lottery as lot_engine
