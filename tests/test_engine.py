@@ -3,7 +3,7 @@
 
 重点锁定的行为：
   1. 保底回血率是比值，与积分汇率无关（单位约掉的数学性质）
-  2. 盈亏平衡概率的三个边界（已回本 / 阈值 / 不可能）
+  2. 情景分析的判定边界（稳赚 / 大概率回本 / 大概率亏 / 不可能）
   3. 估值模型的诱导消费扣减（高频无扣减，低频有扣减）
   4. 奖品名解析（真实奖池里的各种命名模式）
   5. 欧皇鉴定的诚实性（过期券价值归零）
@@ -47,44 +47,77 @@ class TestFloorRecovery(unittest.TestCase):
         self.assertFalse(lot.floor_recovery([], 24, 0.032)["ok"])
 
 
-class TestBreakeven(unittest.TestCase):
-    def test_threshold_case(self):
-        """积分奖 0.5 元、券类均值 2 元、成本 1 元 → p* = (1-0.5)/(2-0.5) = 1/3。"""
-        prizes = [
-            _prize("积分", "points", 0.5),
-            _prize("券A", "cash_coupon", 2.0),
-        ]
-        r = lot.breakeven_probability(prizes, 100, 0.01)  # 成本 1 元
-        self.assertEqual(r["verdict"], "threshold")
-        self.assertAlmostEqual(r["p_star"], 1 / 3, places=4)
-
+class TestScenarioAnalysis(unittest.TestCase):
     def test_guaranteed_win(self):
-        """积分奖已覆盖成本 → 任何概率下不亏。"""
+        """最差档 ≥ 成本 → 任何分布下不亏（严格结论）。"""
         prizes = [
             _prize("积分", "points", 2.0),
             _prize("券A", "cash_coupon", 3.0),
         ]
-        r = lot.breakeven_probability(prizes, 100, 0.01)  # 成本 1 元
+        r = lot.scenario_analysis(prizes, 100, 0.01)  # 成本 1 元
         self.assertEqual(r["verdict"], "guaranteed_win")
-        self.assertEqual(r["p_star"], 0.0)
 
     def test_impossible(self):
-        """券类均值低于成本且高于积分奖 → p* >= 1，数学上不可能。"""
+        """最好档 < 成本 → 任何分布下净亏（严格结论）。"""
+        prizes = [
+            _prize("积分", "points", 0.2),
+            _prize("券A", "cash_coupon", 0.5),
+        ]
+        r = lot.scenario_analysis(prizes, 100, 0.01)  # 成本 1 元
+        self.assertEqual(r["verdict"], "impossible")
+
+    def test_likely_win(self):
+        """90% 最低档仍高于成本 → 大概率回本（最差档需低于成本，否则会先判 guaranteed_win）。"""
+        # 最低档 0.5（<成本1.0），其余 [5.0, 6.0]
+        # 悲观 EV = 0.9*0.5 + 0.1*5.5 = 1.0 —— 恰好临界，调高其余档
+        prizes = [
+            _prize("积分", "points", 0.5),
+            _prize("券A", "cash_coupon", 6.0),
+            _prize("券B", "cash_coupon", 7.0),
+        ]
+        r = lot.scenario_analysis(prizes, 100, 0.01)  # 成本 1 元
+        # 悲观 EV = 0.9*0.5 + 0.1*6.5 = 1.1 > 1.0
+        self.assertEqual(r["verdict"], "likely_win")
+        self.assertAlmostEqual(r["ev_pessimistic"], 1.1, places=4)
+
+    def test_likely_lose(self):
+        """均分假设下也亏 → 大概率不值（最好档需 > 成本，否则会先判 impossible）。"""
+        # 成本 1.0；最好档 1.5（>成本，排除 impossible）
+        # 均分 EV = (0.1+0.5+0.6+1.5)/4 = 0.675 < 1.0 → likely_lose
         prizes = [
             _prize("积分", "points", 0.1),
             _prize("券A", "cash_coupon", 0.5),
+            _prize("券B", "cash_coupon", 0.6),
+            _prize("大奖", "cash_coupon", 1.5),
         ]
-        r = lot.breakeven_probability(prizes, 100, 0.01)  # 成本 1 元
-        self.assertEqual(r["verdict"], "impossible")
+        r = lot.scenario_analysis(prizes, 100, 0.01)
+        self.assertEqual(r["verdict"], "likely_lose")
+        self.assertGreater(r["best_value"], r["cost"])
+        self.assertLess(r["ev_uniform"], r["cost"])
 
-    def test_others_worse(self):
-        """券类折算价值低于积分奖 → 中券不如中积分。"""
+    def test_real_activity_structure(self):
+        """真实活动结构（10 档）：24分/抽、最低档1元券、汇率3.2。
+        最差档 0.63 < 成本 0.768，但悲观 EV 应远高于成本 → likely_win。"""
+        unit = val.point_unit_value(3.2)
+        # 按真实奖池折算：1/2/3元券 + 六张折扣券 + 30积分
         prizes = [
-            _prize("积分", "points", 2.0),
-            _prize("券A", "cash_coupon", 0.5),
+            _prize("1元券", "cash_coupon", 0.63),
+            _prize("2元券", "cash_coupon", 1.26),
+            _prize("3元券", "cash_coupon", 1.90),
+            _prize("麦辣三件套5折券", "discount_coupon", 10.75),
+            _prize("板烧三件套5折券", "discount_coupon", 11.22),
+            _prize("双层鳕鱼三件套6折券", "discount_coupon", 9.61),
+            _prize("甜辣小食组合5折券", "discount_coupon", 7.59),
+            _prize("小食四件套5.5折券", "discount_coupon", 7.96),
+            _prize("麦旋风5折券", "discount_coupon", 4.27),
+            _prize("30积分", "points", 0.96),
         ]
-        r = lot.breakeven_probability(prizes, 100, 0.01)
-        self.assertEqual(r["verdict"], "others_worse")
+        r = lot.scenario_analysis(prizes, 24, unit)
+        self.assertEqual(r["verdict"], "likely_win")
+        self.assertAlmostEqual(r["cost"], 0.768, places=3)
+        self.assertAlmostEqual(r["worst_value"], 0.63, places=2)
+        # 悲观 EV = 0.9*0.63 + 0.1*avg(其余9档) 应 > 0.768
+        self.assertGreater(r["ev_pessimistic"], r["cost"])
 
 
 class TestValueModel(unittest.TestCase):
@@ -188,21 +221,59 @@ class TestLuckAudit(unittest.TestCase):
 
 
 class TestDecide(unittest.TestCase):
+    def test_ineligible_insufficient_points(self):
+        """积分不足时：结论必须是"无法抽奖"，并指引去兑换临期积分。"""
+        floor = {"ok": True, "recovery": 0.82, "min_prize_name": "1元券", "min_value": 0.63, "cost": 0.77}
+        sc = {"ok": True, "verdict": "likely_win"}
+        d = lot.decide(floor, sc, expiring_points=0, available_points=14,
+                       draw_cost_points=24, eligible=False,
+                       ineligible_reason="积分不足")
+        self.assertEqual(d["stance"], "cannot_draw")
+        self.assertIn("积分不足", d["label"])
+
+    def test_ineligible_with_expiring(self):
+        """积分不足但有临期积分：应指引兑换而非抽奖。"""
+        floor = {"ok": True, "recovery": 0.82, "min_prize_name": "1元券", "min_value": 0.63, "cost": 0.77}
+        sc = {"ok": True, "verdict": "likely_win"}
+        d = lot.decide(floor, sc, expiring_points=50, available_points=14,
+                       draw_cost_points=24, eligible=False)
+        self.assertEqual(d["stance"], "cannot_draw")
+        joined = " ".join(d["reasons"])
+        self.assertIn("兑换", joined)
+
     def test_expiring_priority(self):
-        """临期积分优先级最高：即使盈亏平衡不划算，也建议抽掉临期部分。"""
+        """临期积分优先级最高：即使情景分析不划算，也建议抽掉临期部分。"""
         floor = {"ok": True, "recovery": 0.3, "min_prize_name": "x", "min_value": 0.1, "cost": 0.3}
-        be = {"ok": True, "verdict": "impossible", "o_mean": 0.2, "cost": 0.3, "g_mean": 0.1}
-        d = lot.decide(floor, be, expiring_points=100, available_points=500,
-                       draw_cost_points=24)
+        sc = {"ok": True, "verdict": "likely_lose"}
+        d = lot.decide(floor, sc, expiring_points=100, available_points=500,
+                       draw_cost_points=24, eligible=True)
         self.assertEqual(d["stance"], "must_draw")
 
     def test_floor_wins(self):
         """保底回本 → 可放心抽。"""
         floor = {"ok": True, "recovery": 1.25, "min_prize_name": "30积分", "min_value": 0.96, "cost": 0.77}
-        be = {"ok": True, "verdict": "guaranteed_win"}
-        d = lot.decide(floor, be, expiring_points=0, available_points=500,
-                       draw_cost_points=24)
+        sc = {"ok": True, "verdict": "guaranteed_win"}
+        d = lot.decide(floor, sc, expiring_points=0, available_points=500,
+                       draw_cost_points=24, eligible=True)
         self.assertEqual(d["stance"], "draw")
+
+    def test_likely_win_small(self):
+        """悲观情景回本 → 建议小抽（非全额投入）。"""
+        floor = {"ok": True, "recovery": 0.82, "min_prize_name": "1元券", "min_value": 0.63, "cost": 0.77}
+        sc = {"ok": True, "verdict": "likely_win", "note": "x", "worst_prize": "1元券",
+              "worst_value": 0.63, "ev_pessimistic": 0.9, "ev_uniform": 3.0, "cost": 0.77}
+        d = lot.decide(floor, sc, expiring_points=0, available_points=500,
+                       draw_cost_points=24, eligible=True)
+        self.assertEqual(d["stance"], "small")
+
+    def test_likely_lose_avoid(self):
+        """均分也亏 → 建议兑换。"""
+        floor = {"ok": True, "recovery": 0.5, "min_prize_name": "x", "min_value": 0.4, "cost": 0.77}
+        sc = {"ok": True, "verdict": "likely_lose", "note": "x", "ev_pessimistic": 0.4,
+              "ev_uniform": 0.5, "cost": 0.77}
+        d = lot.decide(floor, sc, expiring_points=0, available_points=500,
+                       draw_cost_points=24, eligible=True)
+        self.assertEqual(d["stance"], "avoid")
 
 
 class TestNormalizeAccount(unittest.TestCase):

@@ -10,7 +10,7 @@
 
   1. 保底回血率：最差一档奖品的价值 ÷ 单次成本 —— 完全确定，与概率无关
   2. 结果区间：最差/最好单次结果的边界 —— 完全确定
-  3. 盈亏平衡概率：反推"券类中奖率要到多少才不亏" —— 可被常识检验的阈值
+  3. 情景分析：悲观/均分两种透明假设下的期望，替代"编造概率"
 
 三个输出没有一个依赖编造的概率，但组合起来足够回答"该不该抽"。
 当保底已回本时（现实数据中确实如此），概率甚至不再重要 —— 任何分布下都不亏。
@@ -60,73 +60,88 @@ def floor_recovery(prizes: list, draw_cost_points: float, point_unit: float) -> 
 
 
 # ──────────────────────────────────────────────────────────────
-# 盈亏平衡概率：反推阈值
+# 情景分析：不猜概率，算三种情景下的结果
 # ──────────────────────────────────────────────────────────────
 
-def breakeven_probability(prizes: list, draw_cost_points: float, point_unit: float,
-                          guaranteed_kind: str = "points") -> dict:
-    """反推：非保底类奖品（券类）的合计中奖概率至少要到多少，抽奖才不亏。
+def scenario_analysis(prizes: list, draw_cost_points: float, point_unit: float,
+                      pessimistic_worst_share: float = 0.9) -> dict:
+    """三种明确标注假设的情景分析，替代"编造概率"。
 
-    模型：
-        设 p = 券类奖品的合计中奖概率（未知），其余概率给积分奖。
-        单次 EV = p × E[券类价值] + (1-p) × E[积分价值]
-        不亏条件：EV ≥ 成本
-        ⇒ p* = (成本 − 积分价值均值) / (券类价值均值 − 积分价值均值)
+    数学边界（严格）：
+        EV ∈ [最差档价值, 最好档价值] —— 任何概率分布的结果都在此区间内。
 
-    若积分奖价值已 ≥ 成本 → p* ≤ 0：任何概率下都不亏（"保底已回本"）。
-    若券类均值 ≤ 成本 → p* ≥ 1：数学上不存在不亏的概率，明说。
+    情景（透明假设，供决策参考）：
+        ① 悲观情景：90% 概率中最低档，其余 10% 均分给其他档
+           （不是数学下界，而是一个"相当倒霉"的可信场景）
+        ② 均分情景：所有档位等概率（官方未公示概率，此为假想参照）
+        ③ 最好情况：每次都是最高档（数学上界）
+
+    判定逻辑（按可信度排序）：
+        - 最差档价值 ≥ 成本 → 稳赚不亏（严格结论，任何分布）
+        - 悲观情景 EV ≥ 成本 → 大概率回本（即使 90% 中最低档也不亏）
+        - 均分情景 EV ≥ 成本 → 看运气（需要中奖分布不至于太差）
+        - 最好档价值 < 成本 → 不可能回本（严格结论）
     """
     cost = float(draw_cost_points) * point_unit
+    if not prizes or cost <= 0:
+        return {"ok": False, "reason": "奖池为空或成本为零"}
 
-    guaranteed = [p for p in prizes if p.get("kind") == guaranteed_kind]
-    others = [p for p in prizes if p.get("kind") != guaranteed_kind]
+    values = [float(p.get("net_value") or 0.0) for p in prizes]
+    worst_val, best_val = min(values), max(values)
+    worst_prize = min(prizes, key=lambda p: float(p.get("net_value") or 0.0))
+    best_prize = max(prizes, key=lambda p: float(p.get("net_value") or 0.0))
 
-    if not prizes:
-        return {"ok": False, "reason": "奖池为空"}
-
-    g_vals = [float(p.get("net_value") or 0.0) for p in guaranteed]
-    o_vals = [float(p.get("net_value") or 0.0) for p in others]
-
-    g_mean = sum(g_vals) / len(g_vals) if g_vals else 0.0
-    o_mean = sum(o_vals) / len(o_vals) if o_vals else None
-
-    if not others:
-        if g_mean >= cost:
-            return {"ok": True, "p_star": 0.0, "verdict": "guaranteed_win",
-                    "g_mean": g_mean, "o_mean": None, "cost": cost,
-                    "n_guaranteed": len(guaranteed), "n_others": 0,
-                    "note": "奖池全部为积分奖且均值已覆盖成本，任何概率下都是回血"}
-        return {"ok": True, "p_star": None, "verdict": "impossible",
-                "g_mean": g_mean, "o_mean": None, "cost": cost,
-                "n_guaranteed": len(guaranteed), "n_others": 0,
-                "note": "奖池全部为积分奖且均值低于成本，任何概率下都是净损耗"}
-
-    if o_mean <= g_mean:
-        # 券类折算价值还不如积分奖 —— 对这位用户，抽中券反而不如中积分
-        return {"ok": True, "p_star": None, "verdict": "others_worse",
-                "g_mean": g_mean, "o_mean": o_mean, "cost": cost,
-                "n_guaranteed": len(guaranteed), "n_others": len(others),
-                "note": "券类奖品的折算价值低于积分奖，中券反而不如中积分"}
-
-    denom = o_mean - g_mean
-    p_star = (cost - g_mean) / denom
-
-    if p_star <= 0:
-        verdict = "guaranteed_win"
-        note = "积分奖本身已回本，任何概率下都不亏"
-        p_star = 0.0
-    elif p_star >= 1:
-        verdict = "impossible"
-        note = "券类奖品折算均值低于单次成本，数学上不存在不亏的概率"
+    # ① 悲观情景：90% 最低档 + 10% 均分其余
+    worst_idx = values.index(worst_val)
+    others = [v for i, v in enumerate(values) if i != worst_idx]
+    if others:
+        q = min(max(pessimistic_worst_share, 0.0), 1.0)
+        ev_pess = q * worst_val + (1 - q) * (sum(others) / len(others))
     else:
-        verdict = "threshold"
-        note = "券类合计中奖率需高于此值才值得抽"
+        ev_pess = worst_val
+
+    # ② 均分情景
+    ev_uniform = sum(values) / len(values)
+
+    # ③ 最好情况
+    ev_best = best_val
+
+    # 判定
+    if worst_val >= cost:
+        verdict = "guaranteed_win"
+        note = "最差档（%s，¥%.2f）已覆盖成本（¥%.2f）—— 任何概率分布下都不亏" % (
+            worst_prize.get("name", "—"), worst_val, cost)
+    elif best_val < cost:
+        verdict = "impossible"
+        note = "最好档（%s，¥%.2f）都低于成本（¥%.2f）—— 任何概率分布下都是净亏" % (
+            best_prize.get("name", "—"), best_val, cost)
+    elif ev_pess >= cost:
+        verdict = "likely_win"
+        note = ("即使 90%% 概率都中最低档（%s），期望值 ¥%.2f 仍高于成本 ¥%.2f —— "
+                "只要中奖分布不是极端恶劣就回本" % (worst_prize.get("name", "—"), ev_pess, cost))
+    elif ev_uniform >= cost:
+        verdict = "coin_flip"
+        note = ("需要运气不至于太差：均分假设下期望 ¥%.2f ≥ 成本 ¥%.2f，"
+                "但若概率明显偏向低档就会亏" % (ev_uniform, cost))
+    else:
+        verdict = "likely_lose"
+        note = ("即使均分假设下期望值 ¥%.2f 也低于成本 ¥%.2f —— "
+                "除非大奖概率远高于小奖，否则亏" % (ev_uniform, cost))
 
     return {
-        "ok": True, "p_star": p_star, "verdict": verdict,
-        "g_mean": g_mean, "o_mean": o_mean, "cost": cost,
-        "n_guaranteed": len(guaranteed), "n_others": len(others),
-        "note": note,
+        "ok": True,
+        "verdict": verdict, "note": note,
+        "cost": cost,
+        "worst_value": worst_val, "best_value": best_val,
+        "worst_prize": worst_prize.get("name", "—"),
+        "best_prize": best_prize.get("name", "—"),
+        "ev_pessimistic": ev_pess,
+        "ev_uniform": ev_uniform,
+        "ev_best": ev_best,
+        "net_pessimistic": ev_pess - cost,
+        "net_uniform": ev_uniform - cost,
+        "pessimistic_share": pessimistic_worst_share,
+        "assumption_note": "官方未公示概率；悲观/均分情景为透明假设，非官方数据",
     }
 
 
@@ -218,17 +233,38 @@ def luck_audit(prizes_history: list, draw_cost_points: float, point_unit: float)
 # 决策汇总
 # ──────────────────────────────────────────────────────────────
 
-def decide(floor: dict, breakeven: dict, expiring_points: float,
-           available_points: float, draw_cost_points: float) -> dict:
-    """综合三个输入给出最终建议（按优先级）：
+def decide(floor: dict, scenario: dict, expiring_points: float,
+           available_points: float, draw_cost_points: float,
+           eligible: bool = True, ineligible_reason: str = "") -> dict:
+    """综合输入给出最终建议（按优先级）：
 
+      0. 参与资格检查（积分不足等）→ 直接给出可执行的结论
       1. 有临期积分 → 止损逻辑（过期归零 vs 抽奖折损）
-      2. 保底已回本 → 任何概率下不亏
-      3. 盈亏平衡阈值 → 可被常识检验的建议
+      2. 保底已回本（最差档 ≥ 成本）→ 任何概率下不亏
+      3. 情景分析 → 按可信度分级的建议
     """
     reasons = []
 
-    # ── 场景一：临期积分（最高优先级）──
+    # ── 场景零：参与资格（最高优先级 —— 不能抽就没什么可分析的）──
+    if not eligible:
+        if draw_cost_points > 0 and available_points < draw_cost_points:
+            reasons.append(
+                "您当前可用积分 %.0f 分，不足单次抽奖所需的 %.0f 分 —— 无法参与抽奖"
+                % (available_points, draw_cost_points)
+            )
+            if expiring_points > 0:
+                reasons.append(
+                    "⚠ 另有 %.0f 积分本月将过期：请在过期前到麦麦商城兑换"
+                    "（积分不足时抽奖不是选项，兑换是）" % expiring_points
+                )
+            return {"stance": "cannot_draw", "label": "暂无法抽奖：积分不足",
+                    "reasons": reasons}
+        reasons.append("当前不可参与抽奖%s" % ("（%s）" % ineligible_reason if ineligible_reason else ""))
+        if expiring_points > 0:
+            reasons.append("建议在积分过期前到麦麦商城兑换，避免归零")
+        return {"stance": "cannot_draw", "label": "暂无法抽奖", "reasons": reasons}
+
+    # ── 场景一：临期积分 ──
     if expiring_points > 0 and draw_cost_points > 0:
         max_draws = int(expiring_points // draw_cost_points)
         if max_draws > 0:
@@ -244,7 +280,7 @@ def decide(floor: dict, breakeven: dict, expiring_points: float,
                 "max_draws_for_expiring": max_draws,
             }
 
-    # ── 场景二：保底已回本 ──
+    # ── 场景二：保底已回本（最差档 ≥ 成本，严格结论）──
     if floor.get("ok") and floor.get("recovery", 0) >= 1.0:
         reasons.append(
             "保底回血率 %.0f%%：最差一档（%s）折算 ¥%.2f，已覆盖单次成本 ¥%.2f —— "
@@ -258,41 +294,34 @@ def decide(floor: dict, breakeven: dict, expiring_points: float,
         )
         return {"stance": "draw", "label": "可以放心抽", "reasons": reasons}
 
-    # ── 场景三：看盈亏平衡 ──
-    if breakeven.get("ok"):
-        v = breakeven.get("verdict")
-        if v == "guaranteed_win":
-            reasons.append("积分奖折算价值已回本，任何概率下都不亏")
-            return {"stance": "draw", "label": "可以放心抽", "reasons": reasons}
+    # ── 场景三：情景分析 ──
+    if scenario.get("ok"):
+        v = scenario.get("verdict")
+        if v == "likely_win":
+            reasons.append(scenario["note"])
+            reasons.append(
+                "⚠ 提醒：这是期望口径。单次结果仍可能只中最低档（%s，¥%.2f），"
+                "建议只投入计划内积分的部分" % (scenario.get("worst_prize", "—"),
+                                        scenario.get("worst_value", 0))
+            )
+            return {"stance": "small", "label": "可以小抽，见好就收", "reasons": reasons}
+        if v == "coin_flip":
+            reasons.append(scenario["note"])
+            reasons.append(
+                "参考：悲观情景（90%% 最低档）期望 ¥%.2f，均分情景期望 ¥%.2f，成本 ¥%.2f"
+                % (scenario.get("ev_pessimistic", 0), scenario.get("ev_uniform", 0),
+                   scenario.get("cost", 0))
+            )
+            return {"stance": "small", "label": "看运气，建议浅尝辄止", "reasons": reasons}
+        if v == "likely_lose":
+            reasons.append(scenario["note"])
+            reasons.append(
+                "建议优先到麦麦商城兑换 —— 除非积分即将过期（那时抽奖是止损）"
+            )
+            return {"stance": "avoid", "label": "大概率不值，建议兑换", "reasons": reasons}
         if v == "impossible":
-            reasons.append(
-                "券类奖品对您的折算价值（¥%.2f/张）低于单次成本（¥%.2f）—— "
-                "数学上不存在『不亏』的概率，除非积分即将过期"
-                % (breakeven.get("o_mean") or 0, breakeven.get("cost") or 0)
-            )
-            return {"stance": "avoid", "label": "不建议抽", "reasons": reasons}
-        if v == "threshold":
-            p = breakeven["p_star"]
-            total = (breakeven.get("n_others", 0) + breakeven.get("n_guaranteed", 0))
-            reasons.append(
-                "券类奖品合计中奖率需 ≥ %.0f%% 才回本（券类折算均值 ¥%.2f vs 成本 ¥%.2f）"
-                % (p * 100, breakeven.get("o_mean") or 0, breakeven.get("cost") or 0)
-            )
-            if total:
-                reasons.append(
-                    "奖池共 %d 档，其中券类 %d 档 —— 这个概率门槛是否现实，您可以自己判断"
-                    % (total, breakeven.get("n_others", 0))
-                )
-            stance = "small" if p <= 0.5 else "avoid"
-            label = "可小抽怡情" if stance == "small" else "大概率不值"
-            return {"stance": stance, "label": label, "reasons": reasons}
-        if v == "others_worse":
-            reasons.append(
-                "券类奖品对您的折算价值（¥%.2f/张）低于积分奖（¥%.2f）—— "
-                "奖池里真正对您有价值的主要是积分奖档，其余用不上"
-                % (breakeven.get("o_mean") or 0, breakeven.get("g_mean") or 0)
-            )
-            reasons.append("建议优先走商城兑换；除非积分即将过期，否则不必赌积分奖那一档")
+            reasons.append(scenario["note"])
+            reasons.append("建议到麦麦商城兑换，或等积分商城上新")
             return {"stance": "avoid", "label": "不建议抽", "reasons": reasons}
 
     reasons.append("数据不足，无法给出结论")

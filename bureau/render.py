@@ -34,7 +34,7 @@ def render_terminal(result: dict) -> str:
     acct = result.get("account", {})
     prizes = result.get("prizes", [])
     floor = result.get("floor", {})
-    be = result.get("breakeven", {})
+    sc = result.get("scenario", {})
     rng = result.get("interval", {})
     decision = result.get("decision", {})
     profile = result.get("profile", {})
@@ -83,29 +83,24 @@ def render_terminal(result: dict) -> str:
         out.append("                  ⓘ 前提：奖池外无『谢谢参与』空奖档（官方未公示）")
         out.append("")
 
-    # ── 盈亏平衡 ──
-    if be.get("ok"):
-        out.append("【盈亏平衡】—— 反推：券类中奖率要多少才不亏")
-        if be["verdict"] == "threshold":
-            out.append("  券类均值        ¥%.2f/张（折算后）" % (be["o_mean"] or 0))
-            out.append("  积分奖均值      ¥%.2f/抽" % be["g_mean"])
-            out.append("  ★ 平衡线        券类合计中奖率 ≥ %.0f%%" % (be["p_star"] * 100))
-            out.append("    换言之：你相信券类中奖率超过这个数吗？")
-        elif be["verdict"] == "impossible":
-            out.append("  ✗ 数学结论      券类折算价值（¥%.2f）低于成本（¥%.2f）" % (be["o_mean"] or 0, be["cost"]))
-            out.append("    不存在任何概率分布能让你不亏 —— 除非积分要过期")
-        elif be["verdict"] == "guaranteed_win":
-            out.append("  ✓ 保底已回本，任何概率下都不亏")
-        elif be["verdict"] == "others_worse":
-            out.append("  ⓘ 券类折算价值（¥%.2f）低于积分奖（¥%.2f），中券不如中积分"
-                       % (be["o_mean"] or 0, be["g_mean"] or 0))
+    # ── 情景分析 ──
+    if sc.get("ok"):
+        out.append("【情景分析】—— 官方未公示概率，用透明假设替代")
+        verdict_icon = {
+            "guaranteed_win": "✓", "likely_win": "✓",
+            "coin_flip": "⚖", "likely_lose": "✗", "impossible": "✗",
+        }.get(sc.get("verdict", ""), "•")
+        out.append("  %s %s" % (verdict_icon, sc.get("note", "")))
+        out.append("  悲观情景(90%%最低档) 期望 %+.2f 元" % sc.get("net_pessimistic", 0))
+        out.append("  均分情景(等概率)    期望 %+.2f 元" % sc.get("net_uniform", 0))
+        out.append("                  ⓘ %s" % sc.get("assumption_note", ""))
         out.append("")
 
     # ── 结果区间 ──
     if rng.get("ok"):
-        out.append("【单次结果区间】—— 取值边界，非期望值")
-        out.append("  最差            %+.2f 元（%s）" % (rng["worst_net"], "只中最低档"))
-        out.append("  最好            %+.2f 元（%s）" % (rng["best_net"], "中最高档"))
+        out.append("【单次结果区间】—— 数学边界（任何概率分布都在此区间内）")
+        out.append("  最差            %+.2f 元（%s）" % (rng["worst_net"], rng.get("worst_prize", "只中最低档")))
+        out.append("  最好            %+.2f 元（%s）" % (rng["best_net"], rng.get("best_prize", "中最高档")))
         out.append("")
 
     # ── 用户画像 ──
@@ -139,7 +134,8 @@ def render_terminal(result: dict) -> str:
     # ── 最终建议 ──
     out.append("╔" + "═" * 60 + "╗")
     label = decision.get("label", "—")
-    stance_icon = {"must_draw": "⏰", "draw": "✅", "small": "🎲", "avoid": "🛑"}.get(
+    stance_icon = {"must_draw": "⏰", "draw": "✅", "small": "🎲",
+                   "avoid": "🛑", "cannot_draw": "🚧"}.get(
         decision.get("stance", ""), "•")
     out.append("║  %s 结论：%s" % (stance_icon, _pad(label, 50)) + "║")
     out.append("╚" + "═" * 60 + "╝")
@@ -268,7 +264,6 @@ def render_markdown(result: dict) -> str:
     acct = result.get("account", {})
     prizes = result.get("prizes", [])
     floor = result.get("floor", {})
-    be = result.get("breakeven", {})
     rng = result.get("interval", {})
     decision = result.get("decision", {})
     profile = result.get("profile", {})
@@ -326,19 +321,20 @@ def render_markdown(result: dict) -> str:
         L.append("> ⓘ 前提：奖池外无『谢谢参与』空奖档（官方未公示）。")
         L.append("")
 
-    # 盈亏平衡
-    if be.get("ok"):
-        L.append("## 盈亏平衡")
+    # 情景分析
+    sc = result.get("scenario", {})
+    if sc.get("ok"):
+        L.append("## 情景分析")
         L.append("")
-        if be["verdict"] == "threshold":
-            L.append("**券类合计中奖率需 ≥ %.0f%% 才回本**（券类折算均值 ¥%.2f vs 成本 ¥%.2f）"
-                     % (be["p_star"] * 100, be["o_mean"] or 0, be["cost"]))
-        elif be["verdict"] == "guaranteed_win":
-            L.append("✅ 保底已回本，任何概率下都不亏。")
-        elif be["verdict"] == "impossible":
-            L.append("❌ 券类折算价值低于成本，数学上不存在不亏的概率。")
-        elif be["verdict"] == "others_worse":
-            L.append("ⓘ 券类折算价值低于积分奖，中券不如中积分。")
+        L.append("**%s**" % sc.get("note", ""))
+        L.append("")
+        L.append("| 情景 | 假设 | 单次期望 |")
+        L.append("| --- | --- | ---: |")
+        L.append("| 悲观 | 90%% 概率中最低档 | %+.2f 元 |" % sc.get("net_pessimistic", 0))
+        L.append("| 均分 | 所有档位等概率（假想） | %+.2f 元 |" % sc.get("net_uniform", 0))
+        L.append("| 成本线 | — | -%.2f 元 |" % sc.get("cost", 0))
+        L.append("")
+        L.append("> %s" % sc.get("assumption_note", ""))
         L.append("")
 
     # 区间

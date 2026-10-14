@@ -25,32 +25,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-
-def _load_dotenv():
-    """从项目根目录的 .env 文件加载环境变量（零依赖的极简实现）。
-
-    只在变量尚未设置时填充，不覆盖已有环境变量。
-    .env 已加入 .gitignore，不会被提交。
-    """
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-    if not os.path.exists(env_path):
-        return
-    try:
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, _, value = line.partition("=")
-                key, value = key.strip(), value.strip().strip('"').strip("'")
-                if key and key not in os.environ:
-                    os.environ[key] = value
-    except OSError:
-        pass
-
-
-_load_dotenv()
-
+# 注意：.env 的加载在 bureau/__init__.py 中完成（保证脚本与 import 两种方式都生效）
 from bureau import mcp_client, normalize, render
 from bureau.engine import lottery as lot_engine
 from bureau.engine import value as val_engine
@@ -83,17 +58,19 @@ def analyze(account: dict, lottery_raw: dict, orders: dict = None,
 
     draw_points = activity.get("draw_points") or 0
 
-    # 三个引擎计算
+    # 引擎计算：保底回血 + 情景分析 + 结果区间
     floor = lot_engine.floor_recovery(valued, draw_points, point_unit)
-    breakeven = lot_engine.breakeven_probability(valued, draw_points, point_unit)
+    scenario = lot_engine.scenario_analysis(valued, draw_points, point_unit)
     interval = lot_engine.interval_ev(valued, draw_points, point_unit)
 
-    # 决策
+    # 决策（含参与资格检查）
     decision = lot_engine.decide(
-        floor, breakeven,
+        floor, scenario,
         expiring_points=account.get("expire_this_month", 0),
         available_points=account.get("available", 0),
         draw_cost_points=draw_points,
+        eligible=activity.get("eligible", True),
+        ineligible_reason=activity.get("reason", ""),
     )
 
     # 欧皇鉴定（有历史记录时）
@@ -119,7 +96,7 @@ def analyze(account: dict, lottery_raw: dict, orders: dict = None,
         "prizes": valued,
         "profile": profile,
         "floor": floor,
-        "breakeven": breakeven,
+        "scenario": scenario,
         "interval": interval,
         "decision": decision,
         "audit": audit,
